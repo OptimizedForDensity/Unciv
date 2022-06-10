@@ -851,7 +851,7 @@ object NextTurnAutomation {
     private fun reassignWorkedTiles(civInfo: CivilizationInfo) {
         for (city in civInfo.cities) {
             if (city.isPuppet && city.population.population > 9
-                    && !city.isInResistance() && civInfo.getHappiness() > 0) {
+                    && !city.isInResistance()) {
                 city.annexCity()
             }
 
