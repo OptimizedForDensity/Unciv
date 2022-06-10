@@ -31,7 +31,6 @@ object SimpleHttp {
         with(urlObj.openConnection() as HttpURLConnection) {
             requestMethod = method  // default is GET
             connectTimeout = timeout
-            instanceFollowRedirects = true
             if (UncivGame.isCurrentInitialized())
                 setRequestProperty("User-Agent", "Unciv/${UncivGame.Current.version}-GNU-Terry-Pratchett")
             else
