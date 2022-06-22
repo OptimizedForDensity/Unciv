@@ -415,6 +415,8 @@ object UnitActions {
         return UnitAction(UnitActionType.Upgrade,
             title = title,
             action = {
+                val payload = unit.getTile().getUnits().filter { it.isTransported && unit.isTransportTypeOf(it) }.toList()
+                payload.forEach { it.isTransported = false } // prevent these units from being destroyed in unit.destroy()
                 unit.destroy()
                 val newUnit = civInfo.placeUnitNearTile(unitTile.position, upgradedUnit.name)
 
@@ -428,6 +430,10 @@ object UnitActions {
                     if (!isFree) civInfo.addGold(-goldCostOfUpgrade)
                     unit.copyStatisticsTo(newUnit)
                     newUnit.currentMovement = 0f
+                    for (transported in payload) {
+                        if (newUnit.canTransport(transported)) transported.isTransported = true
+                        else transported.destroy()
+                    }
                 }
             }.takeIf {
                 isFree || (
@@ -435,6 +441,7 @@ object UnitActions {
                     && unit.currentMovement > 0
                     && !unit.isEmbarked()
                     && unit.canUpgrade(unitToUpgradeTo = upgradedUnit)
+                    && !unit.isTransported
                 )
             }
         )
