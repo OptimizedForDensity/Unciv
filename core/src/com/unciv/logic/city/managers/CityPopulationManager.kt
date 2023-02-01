@@ -146,40 +146,70 @@ class CityPopulationManager : IsPartOfGameInfoSerialization {
                 specialistFoodBonus *= unique.params[0].toPercent()
         specialistFoodBonus = 2f - specialistFoodBonus
 
-        val currentCiv = city.civInfo
+        val tilesToEvaluate = city.getWorkableTiles()
+            .filterNot { it.providesYield() }
 
-        val tilesToEvaluate = city.getCenterTile().getTilesInDistance(3)
-            .filter { it.getOwner() == currentCiv }.toList().asSequence()
+        // this is an intensive calculation where tile uniques, city uniques, and civ uniques are all checked
+        // we do not need to recalculate this every single iteration of the for loop
+        val cachedTileStats = tilesToEvaluate.associateWith { it.stats.getTileStats(city, city.civInfo) }.toMutableMap()
+
+        val availableSpecialists = getMaxSpecialists().asSequence()
+            .filter { specialistAllocations[it.key]!! < it.value }
+            .map { it.key }
+
+        val specialistScores = availableSpecialists.associateWith { Automation.rankSpecialist(it, city, cityStats) }.toMutableMap()
+
+        fun updateSpecialistScores() {
+            for (specialist in availableSpecialists) {
+                specialistScores[specialist] = Automation.rankSpecialist(specialist, city, cityStats)
+            }
+        }
+
+        var recalculateTileStats = false
+        fun updateTileStats() {
+            for (tile in tilesToEvaluate) {
+                cachedTileStats[tile] = tile.stats.getTileStats(city, city.civInfo)
+            }
+            recalculateTileStats = false
+        }
+
         for (i in 1..getFreePopulation()) {
             //evaluate tiles
+            if (recalculateTileStats) updateTileStats()
             val (bestTile, valueBestTile) = tilesToEvaluate
-                    .filterNot { it.providesYield() }
-                    .associateWith { Automation.rankTileForCityWork(it, city, cityStats) }
+                    .associateWith { Automation.rankTileForCityWork(it, city, cityStats, cachedTileStats[it]!!) }
                     .maxByOrNull { it.value }
                     ?: object : Map.Entry<Tile?, Float> {
                         override val key: Tile? = null
                         override val value = 0f
                     }
 
-            val bestJob: String? = if (city.manualSpecialists) null else getMaxSpecialists()
-                    .filter { specialistAllocations[it.key]!! < it.value }
-                    .map { it.key }
-                    .maxByOrNull { Automation.rankSpecialist(it, city, cityStats) }
-
             var valueBestSpecialist = 0f
+            val bestJob = if (city.manualSpecialists) null else availableSpecialists
+                .maxByOrNull { specialistScores[it]!! }
+
             if (bestJob != null) {
-                valueBestSpecialist = Automation.rankSpecialist(bestJob, city, cityStats)
+                valueBestSpecialist = specialistScores[bestJob]!!
             }
 
             //assign population
-            if (valueBestTile > valueBestSpecialist) {
-                if (bestTile != null) {
-                    city.workedTiles = city.workedTiles.withItem(bestTile.position)
-                    cityStats[Stat.Food] += bestTile.stats.getTileStats(city, city.civInfo)[Stat.Food]
+            if (bestTile != null && valueBestTile > valueBestSpecialist) {
+                city.workedTiles = city.workedTiles.withItem(bestTile.position)
+                val addedFood = cachedTileStats[bestTile]!![Stat.Food]
+                cityStats[Stat.Food] += addedFood
+                if (addedFood > 0 && i < getFreePopulation()) {
+                    // specialist scores may have changed since the relative value of food may have changed
+                    updateSpecialistScores()
                 }
             } else if (bestJob != null) {
                 specialistAllocations.add(bestJob, 1)
                 cityStats[Stat.Food] += specialistFoodBonus
+                if (i < getFreePopulation()) {
+                    updateSpecialistScores()
+                    /** A tile/improvement yield modifying unique with [UniqueType.ConditionalPopulationFilter]
+                     * with "Specialists" param could theoretically change yields and invalidate cached stats */
+                    recalculateTileStats = true
+                }
             }
         }
         city.cityStats.update()

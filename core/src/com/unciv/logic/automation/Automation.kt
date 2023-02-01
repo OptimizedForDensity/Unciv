@@ -21,7 +21,8 @@ import com.unciv.ui.victoryscreen.RankingType
 
 object Automation {
 
-    fun rankTileForCityWork(tile: Tile, city: City, cityStats: Stats): Float {
+    fun rankTileForCityWork(tile: Tile, city: City, cityStats: Stats, precalculatedTileStats: Stats? = null): Float {
+        if (precalculatedTileStats != null) return rankStatsForCityWork(precalculatedTileStats, city, cityStats)
         val stats = tile.stats.getTileStats(city, city.civInfo)
         return rankStatsForCityWork(stats, city, cityStats)
     }
