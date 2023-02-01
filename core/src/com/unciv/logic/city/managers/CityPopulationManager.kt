@@ -149,8 +149,10 @@ class CityPopulationManager : IsPartOfGameInfoSerialization {
         val tilesToEvaluate = city.getWorkableTiles()
             .filterNot { it.providesYield() }
 
-        // this is an intensive calculation where tile uniques, city uniques, and civ uniques are all checked
-        // we do not need to recalculate this every single iteration of the for loop
+        /** This is an intensive calculation where tile uniques, city uniques, and civ uniques are all checked
+         * we do not need to recalculate this every single iteration of the for loop with possible 1 exception.
+         * A tile/improvement yield modifying unique with [UniqueType.ConditionalPopulationFilter]
+         * with "Specialists" param could theoretically change yields and invalidate cached stats */
         val cachedTileStats = tilesToEvaluate.associateWith { it.stats.getTileStats(city, city.civInfo) }.toMutableMap()
 
         val availableSpecialists = getMaxSpecialists().asSequence()
@@ -206,8 +208,6 @@ class CityPopulationManager : IsPartOfGameInfoSerialization {
                 cityStats[Stat.Food] += specialistFoodBonus
                 if (i < getFreePopulation()) {
                     updateSpecialistScores()
-                    /** A tile/improvement yield modifying unique with [UniqueType.ConditionalPopulationFilter]
-                     * with "Specialists" param could theoretically change yields and invalidate cached stats */
                     recalculateTileStats = true
                 }
             }
